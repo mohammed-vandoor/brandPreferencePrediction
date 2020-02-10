@@ -8,3 +8,5 @@ Then we will clean and preprocess it
 Then we will train some models
 
 Finally we will make predictions
+
+We will also interpret the results of our predictions.
