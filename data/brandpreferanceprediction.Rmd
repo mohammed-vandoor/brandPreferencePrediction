@@ -1,6 +1,6 @@
 ---
 title: "brand preference prediction"
-author: "mohammed NIHAL"
+author: "Mohammed Nihal Vandoor"
 date: "2/13/2020"
 output: html_document
 ---
