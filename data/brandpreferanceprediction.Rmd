@@ -1,0 +1,241 @@
+---
+title: "brand preference prediction"
+author: "mohammed"
+date: "2/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load library
+```{r message=FALSE}
+library(dplyr)
+library(caret)
+library(lattice)
+library(ggplot2)
+library(C50)
+library(randomForest)
+```
+
+# Load dataset
+
+```{r}
+survey=read.csv2(file="surveyBelkinElago.csv",header = TRUE,sep = ";",na.strings =c(""," "),dec = ",")
+```
+
+
+
+# Assigning data types
+```{r}
+survey$salary=as.numeric(survey$salary)
+survey$age=as.numeric(survey$age)
+survey$elevel=as.factor(survey$elevel)
+survey$car=as.factor(survey$car)
+survey$zipcode=as.factor(survey$zipcode)
+survey$credit=as.numeric(survey$credit)
+survey$brand=as.factor(survey$brand)
+```
+
+# Creating 2 df, one with response and another with no response
+```{r}
+
+data1=survey %>% filter(!is.na(brand))
+data2=survey %>% filter(is.na(brand))
+
+
+```
+
+# Partitioning training and testing data
+```{r}
+set.seed(100)
+intraining=createDataPartition(data1$brand,p=.75,list=FALSE)
+training=data1[intraining,]
+testing=data1[-intraining,]
+
+```
+
+
+
+
+
+# Training C5.0 model
+
+```{r}
+
+set.seed(123)
+ctrl<- trainControl(method = "repeatedcv",
+                           number = 10,
+                          repeats = 1, 
+                          returnResamp="all",
+                          classProbs=TRUE,
+                          summaryFunction = twoClassSummary)
+
+
+c50Fit <- train(x=training[1:6],
+                y=training$brand,
+                 method = "C5.0",
+                preProc = c("center", "scale"),
+                tuneLength = 2,
+                trControl = ctrl,
+                metric = "ROC")
+```
+
+# Testing C5.0 model
+```{r}
+C5Classes <- predict(c50Fit, newdata = testing)
+confusionMatrix(C5Classes,testing$brand)
+```
+
+
+
+
+
+
+# Training randomforest model
+```{r}
+set.seed(123)
+tuneGrid <- expand.grid(.mtry = c(1: 5))
+randomFit <- train(x=training[1:6],
+                   y=training$brand,
+                   method = "rf",
+                  preProc = c("center", "scale"),
+                  trControl = ctrl,
+                  metric = "ROC",
+                  tuneGrid = tuneGrid
+)
+randomFit
+```
+
+# Test rf model
+
+
+
+```{r}
+plsClasses <- predict(randomFit, newdata = testing)
+confusionMatrix(plsClasses,testing$brand)
+```
+
+# Training Knn model
+```{r}
+set.seed(123)
+
+tuneGrid <- expand.grid(.k = c(1: 20))
+
+knnFit <- train(x=training[1:6],y=training$brand,
+                   method = "knn",
+                   tuneGrid = tuneGrid,
+                   preProc = c("center", "scale"),
+                   trControl = ctrl,
+                metric = "ROC"
+              
+            
+      
+                   
+)
+```
+
+
+# Testing knn model
+```{r}
+knn <- predict(randomFit, newdata = testing)
+confusionMatrix(knn,testing$brand)
+
+```
+
+
+# Important variables in C5.0 model
+```{r}
+ggplot(varImp(c50Fit))
+
+```
+
+# Important variables in random forest model
+```{r}
+ggplot(varImp(randomFit))
+```
+
+# Important variables in Knn model
+```{r}
+ggplot(varImp(knnFit))
+```
+
+
+# Compairing the three models
+```{r warning=FALSE}
+resamps=resamples(list(c5model=c50Fit,rfmodel=randomFit,knnmodel=knnFit))
+summary(resamps)
+
+```
+
+
+
+
+
+
+# Diffrence of the models and selecting the best model
+```{r}
+diffs <- diff(resamps)
+summary(diffs)
+```
+
+
+* **Random forest model and C5.0 model are similiar**
+* **Knn model differ from other two model and have least roc**
+* **C5.0 have comparitively higher ROC so we select C5.0 as the predicting model**
+
+# Predicting customer's preferance 
+```{r}
+
+predi=predict(c50Fit,newdata=data2)
+table(predi)
+
+```
+# Include the response to the data set
+```{r}
+data3=data2 %>% mutate(brand=predi)
+```
+
+# Join the data sets
+```{r}
+new_data=full_join(data1,data3)
+summary(new_data)
+```
+
+
+# Finding the brand preference of customers
+```{r}
+ggplot(new_data,aes(brand,fill=brand))+geom_bar()+ theme_light() +
+  scale_fill_manual(values = c("Belkin"="darkgreen","Elago"="orangered"))+
+  labs(title = "Brand preference of customer",
+        caption = "Belkin:7054 \nElago:7946")+theme(legend.text = element_text(colour="black",
+                                   size=12, 
+                                   face="bold"),
+        plot.title =element_text(color="black",
+                                 size=15, 
+                                 face="bold.italic"),
+        axis.title.x =element_text(color = "black",
+                                   size = 14,
+                                   face="plain") ,
+        axis.title.y = element_text(color="black",
+                                    size=12,
+                                    face="bold"),
+        legend.title =element_text(colour="black", 
+                                   size=14,
+                                   face="bold"),
+        axis.text.x = element_text(face="bold", 
+                                   color="darkgreen", 
+                                    size=12),
+          axis.text.y = element_text(face="bold",
+                                     color="darkgreen", 
+                                     size=10),
+        plot.caption =element_text(color="black",
+                                    size=12,
+                                    face="bold.italic") )
+```
+
+
+
+
+* **customer prefer to buy Elago products more than Belkin**
